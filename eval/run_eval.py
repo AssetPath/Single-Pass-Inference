@@ -7,7 +7,7 @@ from typing import Dict, Any
 import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # add repo root to sys.path
 
-from app.orchestrator import run_single_pass_generalist
+from app.orchestrator import run_clinical_single_pass, run_single_pass_generalist
 from app.vertex_client import call_flash
 from eval.metrics import numeric_match
 
@@ -97,7 +97,7 @@ def evaluate_ensemble(
         problem = item["problem"]
         gold = item["answer"]
 
-        agent_outputs, final_answer = run_single_pass_generalist(problem)
+        agent_outputs, final_answer = run_clinical_single_pass(problem)
         is_correct = numeric_match(final_answer, gold)
 
         total += 1
