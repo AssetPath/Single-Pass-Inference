@@ -83,42 +83,11 @@ def run_single_pass_generalist(problem: str) -> Tuple[Dict[str, str], str]:
 
 
 # ============================================================
-#  CLINICAL PIPELINE (GENERAL ANALYSTS + CHIEF OF MEDICINE)
+#  CLINICAL PIPELINE 1 (GENERAL ANALYSTS + CHIEF OF MEDICINE)
 # ============================================================
 
 
-# --------- Clinical agents (for patient–doctor dialogue) ----------
-
-CLINICAL_AGENTS = [
-    {
-        "name": "ed_physician",
-        "role": "You are an emergency physician focusing on triage, red flags, and immediate stabilization.",
-        "temperature": 0.4,
-    },
-    {
-        "name": "internal_medicine",
-        "role": "You are an internal medicine attending focusing on holistic differential diagnosis.",
-        "temperature": 0.4,
-    },
-    {
-        "name": "cardiologist",
-        "role": "You are a cardiologist focusing on cardiac risk, chest pain, and hemodynamics.",
-        "temperature": 0.4,
-    },
-    {
-        "name": "pharmacist",
-        "role": "You are a clinical pharmacist focusing on medications, interactions, and contraindications.",
-        "temperature": 0.5,
-    },
-    {
-        "name": "nurse",
-        "role": "You are an experienced bedside nurse focusing on symptoms, safety, and escalation criteria.",
-        "temperature": 0.5,
-    },
-]
-
-
-def run_clinical_single_pass(dialogue: str) -> Tuple[Dict[str, str], str]:
+def run_clinical_single_pass_general(dialogue: str) -> Tuple[Dict[str, str], str]:
     """
     Ensemble inference for clinical dialogue.
     Uses SAME 5 general agents (not medical personas),
@@ -135,7 +104,7 @@ def run_clinical_single_pass(dialogue: str) -> Tuple[Dict[str, str], str]:
             "- Extract key symptoms and risk factors\n"
             "- Identify any red-flag or emergency findings\n"
             "- Suggest next steps (tests, monitoring, escalation)\n\n"
-            f"Use the following perspective: {cfg['role']}\n"
+            f"Use the following perspective: {cfg['suffix']}\n"
             "Do NOT include internal reasoning or chain-of-thought.\n\n"
             "Dialogue:\n"
             f"{dialogue}\n\n"
@@ -176,3 +145,159 @@ def run_clinical_single_pass(dialogue: str) -> Tuple[Dict[str, str], str]:
     final_answer = call_pro("\n".join(judge_lines), max_tokens=1024)
 
     return agent_outputs, final_answer
+
+
+# ============================================================
+#  CLINICAL PIPELINE 2 (CLINICAL AGENTS + CHIEF OF MEDICINE)
+# ============================================================
+
+
+# --------- Clinical agents (for patient–doctor dialogue) ----------
+
+CLINICAL_AGENTS = [
+    {
+        "name": "primary_care",
+        "role": "You are a primary care physician focusing on overall patient health, chronic conditions, and longitudinal care.",
+        "temperature": 0.4,
+    },
+    {
+        "name": "emergency",
+        "role": "You are an emergency physician focusing on acute symptoms, red flags, and urgent findings.",
+        "temperature": 0.4,
+    },
+    {
+        "name": "specialist",
+        "role": "You are a specialist (e.g., cardiologist or neurologist) focusing on organ-specific concerns relevant to the patient’s presentation.",
+        "temperature": 0.4,
+    },
+    {
+        "name": "pharmacist",
+        "role": "You are a clinical pharmacist focusing on medications, interactions, contraindications, and medication-related risks.",
+        "temperature": 0.5,
+    },
+    {
+        "name": "nurse",
+        "role": "You are an experienced bedside nurse focusing on patient-reported symptoms, safety, and functional status.",
+        "temperature": 0.5,
+    },
+]
+
+# Standardized section headers with descriptions
+SECTION_HEADERS_WITH_DESCRIPTIONS = [
+    "fam/sochx [FAMILY HISTORY/SOCIAL HISTORY]",
+    "genhx [HISTORY OF PRESENT ILLNESS]",
+    "pastmedicalhx [PAST MEDICAL HISTORY]",
+    "cc [CHIEF COMPLAINT]",
+    "pastsurgical [PAST SURGICAL HISTORY]",
+    "allergy [ALLERGIES]",
+    "ros [REVIEW OF SYSTEMS]",
+    "medications [CURRENT MEDICATIONS]",
+    "assessment [CLINICAL ASSESSMENT]",
+    "exam [PHYSICAL EXAM FINDINGS]",
+    "diagnosis [DIAGNOSIS]",
+    "disposition [DISPOSITION]",
+    "plan [CLINICAL PLAN]",
+    "edcourse [EMERGENCY DEPARTMENT COURSE]",
+    "immunizations [IMMUNIZATION HISTORY]",
+    "imaging [IMAGING RESULTS]",
+    "gynhx [GYNECOLOGIC HISTORY]",
+    "procedures [PAST PROCEDURES]",
+    "other_history [OTHER RELEVANT HISTORY]",
+    "labs [LABORATORY RESULTS]",
+]
+
+
+def run_clinical_single_pass_clinical(
+    dialogue: str,
+) -> Tuple[List[Dict[str, str]], Dict[str, str]]:
+    """
+    Run single-section clinical summarization:
+    1) Each agent produces {agent_name, section_header, section_text} as strings
+    2) Chief of Medicine merges the 5 agent outputs + dialogue into final summary
+    """
+    agent_outputs: List[Dict[str, str]] = []
+
+    # ---- 1. Run 5 general analysts ----
+    for cfg in CLINICAL_AGENTS:
+        full_prompt = (
+            "You are a clinical summarization assistant.\n"
+            "You will summarize the following patient–doctor dialogue into a single structured section.\n\n"
+            "Instructions:\n"
+            f"- Allowed section headers (choose one): {SECTION_HEADERS_WITH_DESCRIPTIONS}\n"
+            "- Respond EXACTLY as:\n"
+            "  Section Header: <header>\n"
+            "  Section Text: <summary text>\n"
+            "- Do NOT include code fences, JSON, markdown, extra commentary, or extra fields.\n"
+            f"Perspective: {cfg['role']}\n"
+            f"Dialogue:\n{dialogue}\n"
+        )
+
+        answer = call_flash(full_prompt, temperature=cfg["temperature"], max_tokens=512)
+        answer = answer.strip()
+
+        # Parse simple output format
+        lines = answer.splitlines()
+        section_header = "unknown"
+        section_text = ""
+        for line in lines:
+            if line.lower().startswith("section header:"):
+                section_header = line.split(":", 1)[1].strip()
+            elif line.lower().startswith("section text:"):
+                section_text = line.split(":", 1)[1].strip()
+            else:
+                # Append continuation lines to section_text
+                if section_text:
+                    section_text += " " + line.strip()
+
+        agent_outputs.append(
+            {
+                "agent_name": cfg["name"],
+                "section_header": section_header,
+                "section_text": section_text,
+            }
+        )
+
+    # ---- 2. Chief of Medicine ----
+    agent_summaries_text = "\n".join(
+        [
+            f"{a['agent_name']}: {a['section_header']} - {a['section_text']}"
+            for a in agent_outputs
+        ]
+    )
+
+    chief_prompt = (
+        "You are the Chief of Medicine at a large academic hospital.\n"
+        "You are given the original patient–doctor dialogue and multiple agent summaries.\n"
+        "Task:\n"
+        "- Merge the agent summaries into a single final summary.\n"
+        "- Choose the most appropriate section header from the allowed list.\n"
+        "- Respond ONLY in this exact format:\n"
+        "  Section Header: <header>\n"
+        "  Section Text: <summary text>\n"
+        "- Do NOT include code fences, JSON, markdown, or extra commentary.\n"
+        f"Dialogue:\n{dialogue}\n"
+        f"Agent summaries:\n{agent_summaries_text}\n"
+    )
+
+    final_answer = call_pro(chief_prompt, max_tokens=1024)
+    final_answer = final_answer.strip()
+
+    # Parse final answer
+    final_header = "unknown"
+    final_text = ""
+    lines = final_answer.splitlines()
+    for line in lines:
+        if line.lower().startswith("section header:"):
+            final_header = line.split(":", 1)[1].strip()
+        elif line.lower().startswith("section text:"):
+            final_text = line.split(":", 1)[1].strip()
+        else:
+            if final_text:
+                final_text += " " + line.strip()
+
+    final_summary = {
+        "section_header": final_header,
+        "section_text": final_text,
+    }
+
+    return agent_outputs, final_summary
