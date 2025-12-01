@@ -1,6 +1,6 @@
 # app/clinical_demo.py
 
-from app.orchestrator import run_clinical_single_pass
+from app.orchestrator import run_clinical_single_pass_clinical
 
 
 def main():
@@ -15,15 +15,18 @@ def main():
     Patient: I have high blood pressure and high cholesterol.
     """
 
-    # Run the single-pass clinical ensemble
-    agents, final = run_clinical_single_pass(dialogue)
+    # Run the single-pass clinical ensemble (with clinical agents)
+    agent_outputs, final_summary = run_clinical_single_pass_clinical(dialogue)
 
-    print("===== CLINICAL ANALYST OUTPUTS (5 general agents) =====")
-    for name, text in agents.items():
-        print(f"\n--- {name} ---\n{text.strip()}")
+    print("\n===== CLINICAL AGENT SUMMARIES (5 agents) =====")
+    for agent_dict in agent_outputs:
+        print(f"\n--- {agent_dict['agent_name']} ---")
+        print(f"Section Header: {agent_dict['section_header']}")
+        print(f"Section Text: {agent_dict['section_text']}")
 
-    print("\n\n===== CHIEF OF MEDICINE (JUDGE) OUTPUT =====")
-    print(final.strip())
+    print("\n===== CHIEF OF MEDICINE FINAL SUMMARY =====")
+    print(f"Section Header: {final_summary['section_header']}")
+    print(f"Section Text: {final_summary['section_text']}")
 
 
 if __name__ == "__main__":
