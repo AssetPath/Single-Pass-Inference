@@ -9,17 +9,38 @@ from app.vertex_client import call_flash, call_pro
 # ============================================================
 
 AGENTS = [
-    {"name": "solver_1", "suffix": "Think step by step and be cautious.", "temperature": 0.4},
-    {"name": "solver_2", "suffix": "Try an alternative approach if one comes to mind.", "temperature": 0.6},
-    {"name": "solver_3", "suffix": "Double-check any arithmetic carefully.", "temperature": 0.3},
-    {"name": "solver_4", "suffix": "Look for edge cases or hidden assumptions.", "temperature": 0.5},
-    {"name": "solver_5", "suffix": "Be concise and aim directly for the answer.", "temperature": 0.4},
+    {
+        "name": "solver_1",
+        "suffix": "Think step by step and be cautious.",
+        "temperature": 0.4,
+    },
+    {
+        "name": "solver_2",
+        "suffix": "Try an alternative approach if one comes to mind.",
+        "temperature": 0.6,
+    },
+    {
+        "name": "solver_3",
+        "suffix": "Double-check any arithmetic carefully.",
+        "temperature": 0.3,
+    },
+    {
+        "name": "solver_4",
+        "suffix": "Look for edge cases or hidden assumptions.",
+        "temperature": 0.5,
+    },
+    {
+        "name": "solver_5",
+        "suffix": "Be concise and aim directly for the answer.",
+        "temperature": 0.4,
+    },
 ]
 
 
 # ============================================================
 #  GENERALIST PIPELINE (GSM8K / MATH)
 # ============================================================
+
 
 def run_single_pass_generalist(problem: str) -> Tuple[Dict[str, str], str]:
     """
@@ -66,7 +87,6 @@ def run_single_pass_generalist(problem: str) -> Tuple[Dict[str, str], str]:
 # ============================================================
 
 
-
 # --------- Clinical agents (for patient–doctor dialogue) ----------
 
 CLINICAL_AGENTS = [
@@ -97,6 +117,7 @@ CLINICAL_AGENTS = [
     },
 ]
 
+
 def run_clinical_single_pass(dialogue: str) -> Tuple[Dict[str, str], str]:
     """
     Ensemble inference for clinical dialogue.
@@ -106,7 +127,7 @@ def run_clinical_single_pass(dialogue: str) -> Tuple[Dict[str, str], str]:
     agent_outputs: Dict[str, str] = {}
 
     # ---- 1. Run 5 general analysts in a clinical reasoning wrapper ----
-    for cfg in AGENTS:
+    for cfg in CLINICAL_AGENTS:
         full_prompt = (
             "You are a careful clinical reasoning assistant.\n"
             "You will be given a patient–clinician dialogue.\n"
@@ -114,10 +135,11 @@ def run_clinical_single_pass(dialogue: str) -> Tuple[Dict[str, str], str]:
             "- Extract key symptoms and risk factors\n"
             "- Identify any red-flag or emergency findings\n"
             "- Suggest next steps (tests, monitoring, escalation)\n\n"
-            f"Your reasoning style: {cfg['suffix']}\n\n"
+            f"Use the following perspective: {cfg['role']}\n"
+            "Do NOT include internal reasoning or chain-of-thought.\n\n"
             "Dialogue:\n"
             f"{dialogue}\n\n"
-            "Respond with a structured note:\n"
+            "Respond with a structured note (VISIBLE TEXT ONLY):\n"
             "- Key findings\n"
             "- Main concerns\n"
             "- Recommended actions or diagnostic tests\n"
@@ -154,4 +176,3 @@ def run_clinical_single_pass(dialogue: str) -> Tuple[Dict[str, str], str]:
     final_answer = call_pro("\n".join(judge_lines), max_tokens=1024)
 
     return agent_outputs, final_answer
-
