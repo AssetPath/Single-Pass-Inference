@@ -25,7 +25,7 @@ def main():
         print(f"Section Text: {agent_dict['section_text']}")
 
     print("\n===== CHIEF OF MEDICINE FINAL SUMMARY =====")
-    print(f"Section Header: {final_summary['section_header']}")
+    print(f"\nSection Header: {final_summary['section_header']}")
     print(f"Section Text: {final_summary['section_text']}")
 
 

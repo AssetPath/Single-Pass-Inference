@@ -39,6 +39,7 @@ Section Header: genhx
 Section Text: Patient reports 3 hours of central chest pain that started at rest, radiating to the left arm. Associated symptoms include shortness of breath, significant sweating, and nausea. Patient has a history of high blood pressure and high cholesterol.
 
 ===== CHIEF OF MEDICINE FINAL SUMMARY =====
+
 Section Header: History of Present Illness
 Section Text: The patient presents with acute onset of central chest pain that started at rest approximately 3 hours ago. The pain is located in the center of the chest
 ```
