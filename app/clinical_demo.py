@@ -20,10 +20,10 @@ def main():
 
     print("===== CLINICAL ANALYST OUTPUTS (5 general agents) =====")
     for name, text in agents.items():
-        print(f"\n--- {name} ---\n{text}")
+        print(f"\n--- {name} ---\n{text.strip()}")
 
     print("\n\n===== CHIEF OF MEDICINE (JUDGE) OUTPUT =====")
-    print(final)
+    print(final.strip())
 
 
 if __name__ == "__main__":
