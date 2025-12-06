@@ -5,7 +5,7 @@ from app.vertex_client import call_flash, call_pro
 
 
 # ============================================================
-#  GENERAL REASONING AGENTS (used for both math + clinical)
+#  GENERAL REASONING AGENTS (used for math)
 # ============================================================
 
 AGENTS = [
@@ -83,72 +83,7 @@ def run_single_pass_generalist(problem: str) -> Tuple[Dict[str, str], str]:
 
 
 # ============================================================
-#  CLINICAL PIPELINE 1 (GENERAL ANALYSTS + CHIEF OF MEDICINE)
-# ============================================================
-
-
-def run_clinical_single_pass_general(dialogue: str) -> Tuple[Dict[str, str], str]:
-    """
-    Ensemble inference for clinical dialogue.
-    Uses SAME 5 general agents (not medical personas),
-    then a 'Chief of Medicine' Pro judge for a clinical plan.
-    """
-    agent_outputs: Dict[str, str] = {}
-
-    # ---- 1. Run 5 general analysts in a clinical reasoning wrapper ----
-    for cfg in CLINICAL_AGENTS:
-        full_prompt = (
-            "You are a careful clinical reasoning assistant.\n"
-            "You will be given a patient–clinician dialogue.\n"
-            "Your job is to:\n"
-            "- Extract key symptoms and risk factors\n"
-            "- Identify any red-flag or emergency findings\n"
-            "- Suggest next steps (tests, monitoring, escalation)\n\n"
-            f"Use the following perspective: {cfg['suffix']}\n"
-            "Do NOT include internal reasoning or chain-of-thought.\n\n"
-            "Dialogue:\n"
-            f"{dialogue}\n\n"
-            "Respond with a structured note (VISIBLE TEXT ONLY):\n"
-            "- Key findings\n"
-            "- Main concerns\n"
-            "- Recommended actions or diagnostic tests\n"
-        )
-        answer = call_flash(full_prompt, temperature=cfg["temperature"], max_tokens=512)
-        agent_outputs[cfg["name"]] = answer
-
-    # ---- 2. Chief of Medicine Judge ----
-    judge_lines: List[str] = [
-        "You are the Chief of Medicine at a large academic hospital.",
-        "You will receive:",
-        "1) The full patient dialogue",
-        "2) Notes from 5 clinical analysts with different reasoning styles\n",
-        "Your task: synthesize a SAFE and ACCURATE clinical assessment.\n",
-        "Dialogue:",
-        dialogue,
-        "\nAnalyst notes:",
-    ]
-
-    for name, text in agent_outputs.items():
-        judge_lines.append(f"\n### {name}\n{text}")
-
-    judge_lines.append(
-        "\nReturn ONLY the following structure (no extra commentary):\n\n"
-        "ASSESSMENT:\n"
-        "- <summary of symptoms, findings, red flags>\n\n"
-        "IMPRESSION:\n"
-        "- <likely diagnosis or differential>\n\n"
-        "PLAN:\n"
-        "- <next steps: tests, monitoring, escalation>\n"
-        "- <include any MUST-NOT-MISS actions like ER transfer>\n"
-    )
-
-    final_answer = call_pro("\n".join(judge_lines), max_tokens=1024)
-
-    return agent_outputs, final_answer
-
-
-# ============================================================
-#  CLINICAL PIPELINE 2 (CLINICAL AGENTS + CHIEF OF MEDICINE)
+#  CLINICAL PIPELINE (CLINICAL AGENTS + CHIEF OF MEDICINE)
 # ============================================================
 
 
