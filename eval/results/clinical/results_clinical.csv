@@ -1,0 +1,19 @@
+ID,Agent,Section Header,Section Text
+0,primary_care,genhx,The patient is a 76-year-old
+0,emergency,cc,Patient presents for a refill of blood pressure medication. No new concerns
+0,specialist,unknown,
+0,pharmacist,cc,Patient presents for a refill of blood pressure medication.
+0,nurse,unknown,
+0,chief_of_medicine,History of Present Illness,"The patient is a 76-year-old white female who presents for a refill of her blood pressure medication. She has a past medical history of hypertension, osteoarthritis, osteoporosis, hypothyroidism, allergic rhinitis, and kidney stones. She denies any new concerns or changes regarding these conditions. A review of systems is negative for fever, chills, cough, congestion, nausea, vomiting, chest pain, or chest pressure."
+1,primary_care,genhx,"A 25-year-old patient presents with the ""worst headache of her life,"" which started suddenly yesterday, July 31st, at 08:00. Associated symptoms include blurry vision, lightheadedness described as ""blind spots,"" and difficulty writing, noting her naturally right-handed writing looks messy as if done with her left hand. She also reports facial swelling that began around the same time as the headache. She denies nausea and vomiting. In the ER, a thorough exam and evaluation are planned, CT results are pending, and a migraine cocktail and Morphine have been ordered."
+1,emergency,unknown,
+1,specialist,genhx,"A 25-year-old patient presents with the ""worst headache of their life,"" which"
+1,pharmacist,unknown,
+1,nurse,genhx,"The patient, a 25-"
+1,chief_of_medicine,history_of_present_illness,"A 25-year-old patient presents with the ""worst headache of my life,"" which started suddenly yesterday, July 31, 2008, around 11 AM. Associated symptoms include blurry vision, lightheadedness described as ""blind spots,"" and difficulty writing, noting that as a right-handed person, her writing looks messy as if done with her left hand. She also reports facial swelling that began around the same time as the headache. She denies vomiting. The patient is undergoing an evaluation in the ER, including a CT scan for which results are pending. A migraine cocktail and Morphine have been ordered."
+2,primary_care,genhx,A 22-year-old female presents with perianal warts noted approximately 3-4 weeks ago. She reports associated itchiness but denies pain. She expresses concern about the normalcy of this condition for her age. No other symptoms are reported.
+2,emergency,cc,22-year-old female presenting with warts on the perianal area for 3-4 weeks. Associated symptoms include itchiness. Denies pain.
+2,specialist,genhx,"A 22-year-old female presents with perianal warts, first noticed 3-4 weeks ago. She reports associated mild itching but denies any pain or other symptoms."
+2,pharmacist,genhx,"Patient is a 22-year-old female presenting with warts in the anal region, first noticed 3-4 weeks ago. She reports associated itchiness but denies any pain or other symptoms."
+2,nurse,genhx,The patient is a 22-year-old female presenting with warts noted on her perianal area for the past 3-4 weeks. She reports associated mild itching but denies any pain. No other symptoms are reported.
+2,chief_of_medicine,History of Present Illness,"A 22-year-old female presents with a chief complaint of perianal warts, which she first noticed approximately 3-4 weeks ago. She reports associated mild pruritus but denies any pain. The patient denies any other associated symptoms. She expressed concern regarding the normalcy of this condition for her age."

@@ -1,0 +1,4 @@
+ID,Header Match,Text Similarity,Explanation
+0,True,95.0,"The score is high because the prediction accurately captures nearly all essential information, including demographics, medical history, and review of systems. It only omits the minor detail that the patient has been followed by Dr. Kumar."
+1,False,75.0,"The prediction captures the core clinical presentation but introduces significant information not present in the ground truth, such as difficulty writing and a pending CT scan. It also inaccurately states that medications were ""ordered"" rather than ""given"" and omits the specific morphine dosage."
+2,True,95.0,"The prediction accurately captures all essential clinical information, including the patient's complaint, timeline, and symptoms, but includes an additional detail about the patient's concern that was not present in the ground truth."
