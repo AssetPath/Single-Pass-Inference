@@ -1,5 +1,5 @@
 # app/orchestrator.py
-
+import re
 from typing import Dict, List, Tuple
 from app.vertex_client import call_flash, call_pro
 
@@ -150,39 +150,39 @@ def run_clinical_single_pass_clinical(
     1) Each agent produces {agent_name, section_header, section_text} as strings
     2) Chief of Medicine merges the 5 agent outputs + dialogue into final summary
     """
+
     agent_outputs: List[Dict[str, str]] = []
 
-    # ---- 1. Run 5 general analysts ----
+    # ---- 1. Run the 5 generalist agents ----
     for cfg in CLINICAL_AGENTS:
         full_prompt = (
             "You are a clinical summarization assistant.\n"
-            "You will summarize the following patient–doctor dialogue into a single structured section.\n\n"
+            "You will summarize the following patient–doctor dialogue into a single structured section.\n"
+            "Include ALL clinically relevant details from the dialogue, even if missing from the agents.\n\n"
             "Instructions:\n"
-            f"- Allowed section headers (choose one): {SECTION_HEADERS_WITH_DESCRIPTIONS}\n"
+            f"- Allowed section headers (choose one exactly): {SECTION_HEADERS_WITH_DESCRIPTIONS}\n"
             "- Respond EXACTLY as:\n"
             "  Section Header: <header>\n"
             "  Section Text: <summary text>\n"
             "- Do NOT include code fences, JSON, markdown, extra commentary, or extra fields.\n"
             f"Perspective: {cfg['role']}\n"
             f"Dialogue:\n{dialogue}\n"
+            "- Do NOT return 'unknown'. Always pick the closest matching allowed header.\n"
         )
 
-        answer = call_flash(full_prompt, temperature=cfg["temperature"], max_tokens=512)
-        answer = answer.strip()
+        answer = call_flash(
+            full_prompt, temperature=cfg["temperature"], max_tokens=512
+        ).strip()
 
-        # Parse simple output format
-        lines = answer.splitlines()
-        section_header = "unknown"
-        section_text = ""
-        for line in lines:
-            if line.lower().startswith("section header:"):
-                section_header = line.split(":", 1)[1].strip()
-            elif line.lower().startswith("section text:"):
-                section_text = line.split(":", 1)[1].strip()
-            else:
-                # Append continuation lines to section_text
-                if section_text:
-                    section_text += " " + line.strip()
+        # ---- Robust parsing ----
+        header_match = re.search(r"Section Header\s*:\s*(.+)", answer, re.IGNORECASE)
+        section_header = header_match.group(1).strip() if header_match else "unknown"
+
+        # Grab everything after 'Section Text:' as the summary (multi-line)
+        text_match = re.search(
+            r"Section Text\s*:\s*(.+)", answer, re.IGNORECASE | re.DOTALL
+        )
+        section_text = text_match.group(1).strip() if text_match else ""
 
         agent_outputs.append(
             {
@@ -204,8 +204,11 @@ def run_clinical_single_pass_clinical(
         "You are the Chief of Medicine at a large academic hospital.\n"
         "You are given the original patient–doctor dialogue and multiple agent summaries.\n"
         "Task:\n"
-        "- Merge the agent summaries into a single final summary.\n"
-        "- Choose the most appropriate section header from the allowed list.\n"
+        "- Create a single, authoritative summary of the patient encounter.\n"
+        "- Use the agent summaries only as guidance to understand what is potentially important; "
+        "- Include ALL clinically relevant details from the dialogue, even if missing from the agents.\n"
+        "- Choose the most appropriate section header from the allowed list exactly as provided.\n"
+        "- Do NOT return 'unknown'. Always pick the closest matching allowed header.\n"
         "- Respond ONLY in this exact format:\n"
         "  Section Header: <header>\n"
         "  Section Text: <summary text>\n"
@@ -214,25 +217,17 @@ def run_clinical_single_pass_clinical(
         f"Agent summaries:\n{agent_summaries_text}\n"
     )
 
-    final_answer = call_pro(chief_prompt, max_tokens=1024)
-    final_answer = final_answer.strip()
+    final_answer = call_pro(chief_prompt, max_tokens=1800).strip()
 
-    # Parse final answer
-    final_header = "unknown"
-    final_text = ""
-    lines = final_answer.splitlines()
-    for line in lines:
-        if line.lower().startswith("section header:"):
-            final_header = line.split(":", 1)[1].strip()
-        elif line.lower().startswith("section text:"):
-            final_text = line.split(":", 1)[1].strip()
-        else:
-            if final_text:
-                final_text += " " + line.strip()
+    # Robust parsing
+    header_match = re.search(r"Section Header\s*:\s*(.+)", final_answer, re.IGNORECASE)
+    text_match = re.search(
+        r"Section Text\s*:\s*(.+)", final_answer, re.IGNORECASE | re.DOTALL
+    )
 
     final_summary = {
-        "section_header": final_header,
-        "section_text": final_text,
+        "section_header": header_match.group(1).strip() if header_match else "unknown",
+        "section_text": text_match.group(1).strip() if text_match else "",
     }
 
     return agent_outputs, final_summary
