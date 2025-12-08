@@ -47,22 +47,23 @@ def llm_text_similarity_with_explanation(
     Returns a tuple: (score 0–100, short explanation)
     """
     prompt = f"""
-You are a clinical evaluation assistant.
-Compare the following two clinical summaries of a patient.
+    You are a clinical evaluation assistant.
+    Compare the following two clinical summaries of a patient.
 
-Ground Truth:
-{gt_text}
+    Ground Truth:
+    {gt_text}
 
-Prediction:
-{pred_text}
+    Prediction:
+    {pred_text}
 
-Task:
-- Provide a numeric similarity score from 0 to 100, where 100 means fully captures all essential information in the Ground Truth and 0 means completely irrelevant to the Ground Truth.
-- Also provide a short explanation (1–2 sentences) describing why the score is high or low, including any missing key information.
-- Respond ONLY in this exact format:
-Score: <number between 0 and 100>
-Explanation: <short explanation>
-"""
+    Task:
+    - Provide a numeric similarity score from 0 to 100, where 100 means fully captures all essential information in the Ground Truth and 0 means completely irrelevant to the Ground Truth.
+    - Also provide a short explanation (1–2 sentences) describing why the score is high or low, including any missing key information.
+    - Respond ONLY in this exact format:
+    Score: <number between 0 and 100>
+    Explanation: <short explanation>
+    """
+
     response = call_pro(prompt, max_tokens=1800)
     lines = response.strip().splitlines()
     score = 0.0
