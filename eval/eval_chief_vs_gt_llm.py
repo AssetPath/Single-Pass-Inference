@@ -3,6 +3,41 @@ import csv
 from pathlib import Path
 from app.vertex_client import call_pro
 
+SECTION_HEADERS_WITH_DESCRIPTIONS = [
+    "fam/sochx [FAMILY HISTORY/SOCIAL HISTORY]",
+    "genhx [HISTORY OF PRESENT ILLNESS]",
+    "pastmedicalhx [PAST MEDICAL HISTORY]",
+    "cc [CHIEF COMPLAINT]",
+    "pastsurgical [PAST SURGICAL HISTORY]",
+    "allergy [ALLERGIES]",
+    "ros [REVIEW OF SYSTEMS]",
+    "medications [CURRENT MEDICATIONS]",
+    "assessment [CLINICAL ASSESSMENT]",
+    "exam [PHYSICAL EXAM FINDINGS]",
+    "diagnosis [DIAGNOSIS]",
+    "disposition [DISPOSITION]",
+    "plan [CLINICAL PLAN]",
+    "edcourse [EMERGENCY DEPARTMENT COURSE]",
+    "immunizations [IMMUNIZATION HISTORY]",
+    "imaging [IMAGING RESULTS]",
+    "gynhx [GYNECOLOGIC HISTORY]",
+    "procedures [PAST PROCEDURES]",
+    "other_history [OTHER RELEVANT HISTORY]",
+    "labs [LABORATORY RESULTS]",
+]
+
+# Map aliases inside brackets to canonical header
+HEADER_MAP = {}
+for h in SECTION_HEADERS_WITH_DESCRIPTIONS:
+    canonical = h.split(" ")[0].lower()  # e.g., genhx
+    alias = h[h.find("[") + 1 : h.find("]")].lower()  # inside brackets
+    HEADER_MAP[canonical] = canonical
+    HEADER_MAP[alias] = canonical
+
+
+def normalize_header(header: str) -> str:
+    return HEADER_MAP.get(header.strip().lower(), header.strip().lower())
+
 
 def llm_text_similarity_with_explanation(
     gt_text: str, pred_text: str
@@ -56,7 +91,7 @@ def main():
         reader = csv.DictReader(f)
         for row in reader:
             gt_dict[row["ID"]] = {
-                "section_header": row["section_header"].strip(),
+                "section_header": normalize_header(row["section_header"]),
                 "section_text": row["section_text"].strip(),
             }
 
@@ -72,7 +107,7 @@ def main():
             if not gt:
                 continue
 
-            pred_header = row["Section Header"].strip()
+            pred_header = normalize_header(row["Section Header"])
             gt_header = gt["section_header"]
 
             header_match = pred_header == gt_header
@@ -101,8 +136,12 @@ def main():
     total = len(eval_rows)
     header_acc = sum(r["Header Match"] for r in eval_rows) / total if total else 0
     avg_text_sim = sum(r["Text Similarity"] for r in eval_rows) / total if total else 0
-    print(f"Header accuracy: {header_acc:.3f}")
-    print(f"Average Section Text similarity (LLM score 0–100): {avg_text_sim:.2f}")
+    print("\n" + "=" * 50)
+    print("CLINICAL EVALUATION SUMMARY")
+    print("=" * 50)
+    print(f"Header Accuracy        : {header_acc*100:.2f}%")
+    print(f"Average Text Similarity: {avg_text_sim:.2f} / 100")
+    print("=" * 50 + "\n")
 
 
 if __name__ == "__main__":
