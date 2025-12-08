@@ -47,7 +47,7 @@ Section Header: genhx
 Section Text: The patient presents with a 3-hour history of central chest pain that started at rest. The pain radiates to the left arm and is associated with shortness of breath, significant sweating, and nausea. The patient has a past medical history of high blood pressure and high cholesterol.
 ```
 
-### Clinical Pipeline Evaluation Results (first 30 dialogs)
+## Clinical Pipeline Evaluation Results (first 30 dialogs)
 ```
 ==================================================
 CLINICAL AGENT EVALUATION SUMMARY
