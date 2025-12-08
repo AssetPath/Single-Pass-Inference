@@ -3,41 +3,6 @@ import csv
 from pathlib import Path
 from app.vertex_client import call_pro
 
-SECTION_HEADERS_WITH_DESCRIPTIONS = [
-    "fam/sochx [FAMILY HISTORY/SOCIAL HISTORY]",
-    "genhx [HISTORY OF PRESENT ILLNESS]",
-    "pastmedicalhx [PAST MEDICAL HISTORY]",
-    "cc [CHIEF COMPLAINT]",
-    "pastsurgical [PAST SURGICAL HISTORY]",
-    "allergy [ALLERGIES]",
-    "ros [REVIEW OF SYSTEMS]",
-    "medications [CURRENT MEDICATIONS]",
-    "assessment [CLINICAL ASSESSMENT]",
-    "exam [PHYSICAL EXAM FINDINGS]",
-    "diagnosis [DIAGNOSIS]",
-    "disposition [DISPOSITION]",
-    "plan [CLINICAL PLAN]",
-    "edcourse [EMERGENCY DEPARTMENT COURSE]",
-    "immunizations [IMMUNIZATION HISTORY]",
-    "imaging [IMAGING RESULTS]",
-    "gynhx [GYNECOLOGIC HISTORY]",
-    "procedures [PAST PROCEDURES]",
-    "other_history [OTHER RELEVANT HISTORY]",
-    "labs [LABORATORY RESULTS]",
-]
-
-# Map aliases inside brackets to canonical header
-HEADER_MAP = {}
-for h in SECTION_HEADERS_WITH_DESCRIPTIONS:
-    canonical = h.split(" ")[0].lower()  # e.g., genhx
-    alias = h[h.find("[") + 1 : h.find("]")].lower()  # inside brackets
-    HEADER_MAP[canonical] = canonical
-    HEADER_MAP[alias] = canonical
-
-
-def normalize_header(header: str) -> str:
-    return HEADER_MAP.get(header.strip().lower(), header.strip().lower())
-
 
 def llm_text_similarity_with_explanation(
     gt_text: str, pred_text: str
@@ -91,7 +56,7 @@ def main():
         reader = csv.DictReader(f)
         for row in reader:
             gt_dict[row["ID"]] = {
-                "section_header": normalize_header(row["section_header"]),
+                "section_header": row["section_header"].strip(),
                 "section_text": row["section_text"].strip(),
             }
 
@@ -107,7 +72,7 @@ def main():
             if not gt:
                 continue
 
-            pred_header = normalize_header(row["Section Header"])
+            pred_header = row["Section Header"].strip()
             gt_header = gt["section_header"]
 
             header_match = pred_header == gt_header
