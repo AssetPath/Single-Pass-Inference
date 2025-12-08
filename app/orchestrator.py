@@ -158,37 +158,38 @@ def run_clinical_single_pass_clinical(
         full_prompt = (
             "You are a clinical summarization assistant.\n"
             "You will summarize the following patient–doctor dialogue into a single structured section.\n"
-            "Include ALL clinically relevant details from the dialogue, even if missing from the agents.\n\n"
+            "Include ALL clinically relevant details from the dialogue.\n\n"
             "Instructions:\n"
             f"- Allowed section headers (choose one exactly): {SECTION_HEADERS_WITH_DESCRIPTIONS}\n"
-            "- Respond EXACTLY as:\n"
-            "  Section Header: <header>\n"
+            "- Respond ONLY in EXACTLY this format, with these words verbatim:\n"
+            "  Section Header: <choose one allowed header exactly, don't include the description in []>\n"
             "  Section Text: <summary text>\n"
-            "- Do NOT include code fences, JSON, markdown, extra commentary, or extra fields.\n"
+            "Do NOT include code fences, JSON, markdown, extra commentary, or extra fields.\n\n"
+            "Example:\n"
+            "Section Header: genhx\n"
+            "Section Text: The patient is a 76-year-old female presenting for a refill of blood pressure medication. She has a history of hypertension and osteoarthritis. She reports no new complaints.\n\n"
             f"Perspective: {cfg['role']}\n"
             f"Dialogue:\n{dialogue}\n"
-            "- Do NOT return 'unknown'. Always pick the closest matching allowed header.\n"
         )
 
         answer = call_flash(
-            full_prompt, temperature=cfg["temperature"], max_tokens=512
+            full_prompt, temperature=cfg["temperature"], max_tokens=1800
         ).strip()
 
-        # ---- Robust parsing ----
         header_match = re.search(r"Section Header\s*:\s*(.+)", answer, re.IGNORECASE)
-        section_header = header_match.group(1).strip() if header_match else "unknown"
-
-        # Grab everything after 'Section Text:' as the summary (multi-line)
         text_match = re.search(
             r"Section Text\s*:\s*(.+)", answer, re.IGNORECASE | re.DOTALL
         )
-        section_text = text_match.group(1).strip() if text_match else ""
 
         agent_outputs.append(
             {
                 "agent_name": cfg["name"],
-                "section_header": section_header,
-                "section_text": section_text,
+                "section_header": (
+                    header_match.group(1).strip() if header_match else "PARSE_FAILED"
+                ),
+                "section_text": (
+                    text_match.group(1).strip() if text_match else "PARSE_FAILED"
+                ),
             }
         )
 
@@ -205,29 +206,31 @@ def run_clinical_single_pass_clinical(
         "You are given the original patient–doctor dialogue and multiple agent summaries.\n"
         "Task:\n"
         "- Create a single, authoritative summary of the patient encounter.\n"
-        "- Use the agent summaries only as guidance to understand what is potentially important; "
-        "- Include ALL clinically relevant details from the dialogue, even if missing from the agents.\n"
+        "- Use the agent summaries only as guidance; include ALL clinically relevant details from the dialogue.\n"
         "- Choose the most appropriate section header from the allowed list exactly as provided.\n"
-        "- Do NOT return 'unknown'. Always pick the closest matching allowed header.\n"
-        "- Respond ONLY in this exact format:\n"
-        "  Section Header: <header>\n"
+        "- Respond ONLY in EXACTLY this format, with these words verbatim:\n"
+        "  Section Header: <choose one allowed header exactly, don't include the description in []>\n"
         "  Section Text: <summary text>\n"
-        "- Do NOT include code fences, JSON, markdown, or extra commentary.\n"
+        "Do NOT omit these labels, do not add extra commentary, do not use code blocks, JSON, or markdown.\n\n"
+        "Example:\n"
+        "Section Header: genhx\n"
+        "Section Text: The patient is a 76-year-old female presenting for a refill of blood pressure medication. She has a history of hypertension and osteoarthritis. She reports no new complaints.\n\n"
         f"Dialogue:\n{dialogue}\n"
         f"Agent summaries:\n{agent_summaries_text}\n"
     )
 
     final_answer = call_pro(chief_prompt, max_tokens=1800).strip()
 
-    # Robust parsing
     header_match = re.search(r"Section Header\s*:\s*(.+)", final_answer, re.IGNORECASE)
     text_match = re.search(
         r"Section Text\s*:\s*(.+)", final_answer, re.IGNORECASE | re.DOTALL
     )
 
     final_summary = {
-        "section_header": header_match.group(1).strip() if header_match else "unknown",
-        "section_text": text_match.group(1).strip() if text_match else "",
+        "section_header": (
+            header_match.group(1).strip() if header_match else "PARSE_FAILED"
+        ),
+        "section_text": text_match.group(1).strip() if text_match else "PARSE_FAILED",
     }
 
     return agent_outputs, final_summary
