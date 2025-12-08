@@ -1,8 +1,9 @@
-# eval/eval_chief_vs_gt_llm.py
+# eval/eval_clinical_agents_vs_gt_llm.py
 import csv
 from pathlib import Path
 from app.vertex_client import call_pro
 
+# Standardized section headers with descriptions
 SECTION_HEADERS_WITH_DESCRIPTIONS = [
     "fam/sochx [FAMILY HISTORY/SOCIAL HISTORY]",
     "genhx [HISTORY OF PRESENT ILLNESS]",
@@ -81,7 +82,7 @@ def llm_text_similarity_with_explanation(
 def main():
     results_csv = Path("eval/results/clinical/results_clinical.csv")
     gt_csv = Path("dataset/MTS-Dialog-TrainingSet_Dialogue_Removed.csv")
-    out_csv = Path("eval/results/clinical/eval_chief_vs_gt_llm.csv")
+    out_csv = Path("eval/results/clinical/eval_clinical_agents_vs_gt_llm.csv")
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
     gt_dict = {}
@@ -97,8 +98,6 @@ def main():
     with open(results_csv, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            if row["Agent"] != "chief_of_medicine":
-                continue
             pid = row["ID"]
             gt = gt_dict.get(pid)
             if not gt:
@@ -116,6 +115,7 @@ def main():
             eval_rows.append(
                 {
                     "ID": pid,
+                    "Agent": row["Agent"],
                     "Header Match": header_match,
                     "Text Similarity": text_score,
                     "Explanation": explanation,
@@ -124,19 +124,36 @@ def main():
 
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
-            f, fieldnames=["ID", "Header Match", "Text Similarity", "Explanation"]
+            f,
+            fieldnames=[
+                "ID",
+                "Agent",
+                "Header Match",
+                "Text Similarity",
+                "Explanation",
+            ],
         )
         writer.writeheader()
         writer.writerows(eval_rows)
 
-    total = len(eval_rows)
-    header_acc = sum(r["Header Match"] for r in eval_rows) / total if total else 0
-    avg_text_sim = sum(r["Text Similarity"] for r in eval_rows) / total if total else 0
+    agents = sorted(
+        set(r["Agent"] for r in eval_rows if r["Agent"] != "chief_of_medicine")
+    )
+    agents.append("chief_of_medicine")
+
     print("\n" + "=" * 50)
-    print("CLINICAL EVALUATION SUMMARY")
+    print("CLINICAL AGENT EVALUATION SUMMARY")
     print("=" * 50)
-    print(f"Header Accuracy        : {header_acc*100:.2f}%")
-    print(f"Average Text Similarity: {avg_text_sim:.2f} / 100")
+    for agent in agents:
+        agent_rows = [r for r in eval_rows if r["Agent"] == agent]
+        total = len(agent_rows)
+        header_acc = sum(r["Header Match"] for r in agent_rows) / total if total else 0
+        avg_text_sim = (
+            sum(r["Text Similarity"] for r in agent_rows) / total if total else 0
+        )
+        print(
+            f"{agent.upper():<25} | Header Accuracy: {header_acc*100:.2f}% | Average Text Similarity: {avg_text_sim:.2f} / 100"
+        )
     print("=" * 50 + "\n")
 
 

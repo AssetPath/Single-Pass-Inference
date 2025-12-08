@@ -206,7 +206,7 @@ def run_clinical_single_pass_clinical(
         "You are given the original patient–doctor dialogue and multiple agent summaries.\n"
         "Task:\n"
         "- Create a single, authoritative summary of the patient encounter.\n"
-        "- Use the agent summaries only as guidance; include ALL clinically relevant details from the dialogue.\n"
+        "- Use the agent summaries as guidance to include ALL clinically relevant details from the dialogue.\n"
         "- Choose the most appropriate section header from the allowed list exactly as provided.\n"
         "- Respond ONLY in EXACTLY this format, with these words verbatim:\n"
         "  Section Header: <choose one allowed header exactly, don't include the description in []>\n"
