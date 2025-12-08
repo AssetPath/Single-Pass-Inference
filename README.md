@@ -46,3 +46,17 @@ Section Text: Patient presents with chest pain for 3 hours, which started at res
 Section Header: genhx
 Section Text: The patient presents with a 3-hour history of central chest pain that started at rest. The pain radiates to the left arm and is associated with shortness of breath, significant sweating, and nausea. The patient has a past medical history of high blood pressure and high cholesterol.
 ```
+
+### Clinical Pipeline Evaluation Results (first 30 dialogs)
+```
+==================================================
+CLINICAL AGENT EVALUATION SUMMARY
+==================================================
+EMERGENCY                 | Header Accuracy: 76.67% | Average Text Similarity: 79.93 / 100
+NURSE                     | Header Accuracy: 76.67% | Average Text Similarity: 80.10 / 100
+PHARMACIST                | Header Accuracy: 73.33% | Average Text Similarity: 78.67 / 100
+PRIMARY_CARE              | Header Accuracy: 70.00% | Average Text Similarity: 84.43 / 100
+SPECIALIST                | Header Accuracy: 73.33% | Average Text Similarity: 81.60 / 100
+CHIEF_OF_MEDICINE         | Header Accuracy: 76.67% | Average Text Similarity: 82.00 / 100
+==================================================
+```
