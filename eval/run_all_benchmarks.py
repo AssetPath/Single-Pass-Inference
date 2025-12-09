@@ -2,8 +2,6 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 
-
-# Adjust paths if your dataset files differ
 DATASETS = [
     {
         "name": "gsm8k",
@@ -65,9 +63,8 @@ def main() -> None:
             print(f"[WARN] Skipping {name}: data file not found at {data_path}")
             continue
 
-        # -----------------------------
         # 1. Run eval.run_eval
-        # -----------------------------
+
         cmd_eval = [
             "python",
             "-m",
@@ -85,9 +82,7 @@ def main() -> None:
         print(f"\n>>>> [{name.upper()}] Running evaluation...")
         run_cmd(cmd_eval)
 
-        # -----------------------------
         # 2. Run eval.analyze_results
-        # -----------------------------
         single_path = f"{outdir}/results_single.jsonl"
         ensemble_path = f"{outdir}/results_ensemble.jsonl"
 

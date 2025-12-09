@@ -13,9 +13,7 @@ def extract_last_number(text: str) -> str | None:
     matches = re.findall(r"-?\d+(?:\.\d+)?", text)
     return matches[-1] if matches else None
 
-# ============================================================
 #  GENERAL REASONING AGENTS (used for math)
-# ============================================================
 
 AGENTS = [
     {

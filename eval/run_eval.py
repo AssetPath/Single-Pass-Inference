@@ -19,11 +19,7 @@ from app.orchestrator import (
     run_single_pass_engineering,
 )
 
-
-
-# ------------------------
 # Helpers
-# ------------------------
 
 def load_jsonl(path: Path) -> Iterable[Dict[str, Any]]:
     """Stream JSONL file one example at a time."""
@@ -49,10 +45,7 @@ def to_numeric(text: str) -> Optional[str]:
     """Wrapper so we also log the parsed numeric form (if any)."""
     return extract_last_number(text)  # may return None
 
-
-# ------------------------
 # Single-model baseline
-# ------------------------
 
 def evaluate_single(
     data_path: Path,
@@ -113,94 +106,6 @@ def evaluate_single(
         print(f"[single] Saved detailed results to {output_path}")
 
 
-# ------------------------
-# Single-pass ensemble
-# ------------------------
-
-# def evaluate_ensemble(
-#     data_path: Path,
-#     limit: int | None = None,
-#     output_path: Path | None = None,
-# ) -> None:
-#     """
-#     Single-pass reflective ensemble:
-#     - 5 generalist solvers (see app/orchestrator.py: AGENTS)
-#     - 1 Gemini Pro judge that selects / synthesizes a final answer.
-#     """
-#     results = []
-#     total = 0
-#     correct = 0
-#
-#     # Choose domain-specific ensemble
-#     name = data_path.name.lower()
-#     if "financial" in name:
-#         ensemble_fn = run_single_pass_financial
-#     elif "medical" in name:
-#         ensemble_fn = run_single_pass_medical
-#     elif "engineering" in name or "eng_" in name:
-#         ensemble_fn = run_single_pass_engineering
-#     else:
-#         ensemble_fn = run_single_pass_generalist
-#
-#     for i, item in enumerate(load_jsonl(data_path)):
-#         if limit is not None and i >= limit:
-#             break
-#
-#         problem = item.get("problem") or item.get("question")
-#         gold = str(item["answer"]).strip()
-#
-#         agent_outputs, judged = ensemble_fn(problem)
-#
-#         is_correct = numeric_match(judge_output, gold)
-#         total += 1
-#         correct += int(is_correct)
-#
-#         # Build per-solver structure for logging
-#         solvers_struct = []
-#         for name, text in agent_outputs.items():
-#             solvers_struct.append(
-#                 {
-#                     "name": name,
-#                     "raw_output": text,
-#                     "pred_answer_num": to_numeric(text),
-#                     # token usage placeholder
-#                     "tokens_prompt": None,
-#                     "tokens_completion": None,
-#                     "tokens_total": None,
-#                 }
-#             )
-#
-#         record: Dict[str, Any] = {
-#             "id": pid,
-#             "problem": problem,
-#             "gold_answer_raw": gold,
-#             "gold_answer_num": to_numeric(gold),
-#             "mode": "ensemble",
-#             "ensemble": {
-#                 "judge_output_raw": judge_output,
-#                 "judge_answer_num": to_numeric(judge_output),
-#                 "correct": is_correct,
-#                 "solvers": solvers_struct,
-#                 # aggregated token usage placeholders for now
-#                 "tokens_total_prompt": None,
-#                 "tokens_total_completion": None,
-#                 "tokens_total": None,
-#             },
-#         }
-#         results.append(record)
-#
-#         if (i + 1) % 5 == 0:
-#             print(f"[ensemble] Processed {i+1} examples. Running accuracy: {correct/total:.3f}")
-#
-#     acc = correct / total if total else 0.0
-#     print(f"\n[ensemble] Final accuracy: {acc:.3f} over {total} examples.")
-#
-#     if output_path is not None:
-#         with output_path.open("w", encoding="utf-8") as f:
-#             for r in results:
-#                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
-#         print(f"[ensemble] Saved detailed results to {output_path}")
-
 def evaluate_ensemble(
     data_path: Path,
     limit: int | None = None,
@@ -250,7 +155,6 @@ def evaluate_ensemble(
                 if len(parts) >= 2:
                     return parts[-1].strip()
 
-        # Fallback: last number in the text, or the whole string stripped
         num = extract_last_number(judge_text)
         return num if num is not None else judge_text.strip()
 
@@ -259,9 +163,7 @@ def evaluate_ensemble(
             return None
         return extract_last_number(str(text))
 
-    # -------------------------
     # Main evaluation loop
-    # -------------------------
     for i, item in enumerate(load_jsonl(data_path)):
         if limit is not None and i >= limit:
             break
@@ -331,11 +233,7 @@ def evaluate_ensemble(
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
         print(f"[ensemble] Saved detailed results to {output_path}")
 
-
-
-# ------------------------
 # CLI
-# ------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser()
