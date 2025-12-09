@@ -60,3 +60,10 @@ SPECIALIST                | Header Accuracy: 73.33% | Average Text Similarity: 8
 CHIEF_OF_MEDICINE         | Header Accuracy: 76.67% | Average Text Similarity: 82.00 / 100
 ==========================================================================================
 ```
+
+### Sample Output From LLM Evaluator 
+Location: 'eval/results/clinical/eval_clinical_agents_vs_gt_llm.csv'
+```
+ID,Agent,Header Match,Text Similarity,Explanation
+0,primary_care,True,95.0,"The score is high as the prediction accurately captures the patient's demographics, past medical history, stability of conditions, and review of systems. It only omits the minor detail that the patient has been followed by Dr. Kumar."
+```
