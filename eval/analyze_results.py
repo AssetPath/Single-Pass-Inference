@@ -1,95 +1,204 @@
 # eval/analyze_results.py
-import argparse
+
 import json
 from pathlib import Path
+from statistics import mean
+from typing import Dict, List, Any
 
 
-def load_jsonl(path: Path):
+def load_jsonl(path: Path) -> List[Dict[str, Any]]:
+    data = []
     with path.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line:
-                continue
-            yield json.loads(line)
+            if line:
+                data.append(json.loads(line))
+    return data
 
 
-def summarize_pair(single_path: Path, ensemble_path: Path, label: str):
-    single_records = {r["id"]: r for r in load_jsonl(single_path)}
-    ensemble_records = {r["id"]: r for r in load_jsonl(ensemble_path)}
+def compute_accuracy(records: List[Dict[str, Any]]) -> float:
+    correct = 0
+    total = 0
 
-    ids = sorted(set(single_records.keys()) & set(ensemble_records.keys()))
+    for r in records:
+        mode = r["mode"]
 
-    total = len(ids)
-    if total == 0:
-        print(f"[{label}] No overlapping examples found.")
-        return
+        if mode == "single":
+            if r["single"]["correct"]:
+                correct += 1
+        elif mode == "ensemble":
+            if r["ensemble"]["correct"]:
+                correct += 1
 
-    single_correct = 0
-    ensemble_correct = 0
-    both_correct = 0
-    both_wrong = 0
-    single_only = 0  # single correct, ensemble wrong
-    ensemble_only = 0  # ensemble correct, single wrong
+        total += 1
 
-    for _id in ids:
-        s = bool(single_records[_id]["correct"])
-        e = bool(ensemble_records[_id]["correct"])
+    return correct / total if total else 0.0
 
-        if s:
-            single_correct += 1
-        if e:
-            ensemble_correct += 1
 
-        if s and e:
-            both_correct += 1
-        elif s and not e:
-            single_only += 1
-        elif not s and e:
-            ensemble_only += 1
+def classify_difficulty(problem: str) -> str:
+    """Approximate difficulty based on problem length."""
+    words = len(problem.split())
+    if words < 40:
+        return "easy"
+    elif words < 80:
+        return "medium"
+    else:
+        return "hard"
+
+
+def difficulty_breakdown(records: List[Dict[str, Any]]) -> Dict[str, float]:
+    buckets = {"easy": [], "medium": [], "hard": []}
+
+    for r in records:
+        mode = r["mode"]
+        problem = r["problem"]
+
+        diff = classify_difficulty(problem)
+
+        if mode == "single":
+            correct = r["single"]["correct"]
         else:
-            both_wrong += 1
+            correct = r["ensemble"]["correct"]
 
-    acc_single = single_correct / total
-    acc_ensemble = ensemble_correct / total
+        buckets[diff].append(int(correct))
 
-    print(f"\n=== {label} ===")
-    print(f"Total examples: {total}")
-    print(f"Single accuracy:   {acc_single:.3f} ({single_correct}/{total})")
-    print(f"Ensemble accuracy: {acc_ensemble:.3f} ({ensemble_correct}/{total})")
-    print(f"ΔAcc (ensemble - single): {acc_ensemble - acc_single:+.3f}")
-    print()
-    print("Outcome breakdown (out of overlapping examples):")
-    print(f"  Both correct:                 {both_correct}")
-    print(f"  Both wrong:                   {both_wrong}")
-    print(f"  Single only correct (losses): {single_only}")
-    print(f"  Ensemble only correct (wins): {ensemble_only}")
-    print()
-    if total > 0:
-        print(f"  Win rate  (ensemble rescues single): {ensemble_only / total:.3f}")
-        print(f"  Loss rate (ensemble harms single):   {single_only / total:.3f}")
+    return {
+        k: (sum(v) / len(v) if v else 0.0)
+        for k, v in buckets.items()
+    }
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--gsm8k_dir", type=str, default="eval/results/gsm8k")
-    parser.add_argument("--math_dir", type=str, default="eval/results/math")
-    args = parser.parse_args()
+def run_analysis(single_path: Path, ensemble_path: Path) -> None:
+    single_records = load_jsonl(single_path)
+    ensemble_records = load_jsonl(ensemble_path)
 
-    gsm8k_dir = Path(args.gsm8k_dir)
-    math_dir = Path(args.math_dir)
+    print("\n===== BASELINES =====")
+    print(f"Majority vote accuracy: {majority_vote(ensemble_records):.3f}")
+    print(f"Oracle best-of-K accuracy: {oracle_best_of_k(ensemble_records):.3f}")
 
-    summarize_pair(
-        gsm8k_dir / "results_single.jsonl",
-        gsm8k_dir / "results_ensemble.jsonl",
-        label="GSM8K",
-    )
+    print("\n===== PER-SOLVER ACCURACY (Ensemble records) =====")
+    solver_acc = per_solver_accuracy(ensemble_records)
+    for name, a in solver_acc.items():
+        print(f"{name}: {a:.3f}")
 
-    summarize_pair(
-        math_dir / "results_single.jsonl",
-        math_dir / "results_ensemble.jsonl",
-        label="MATH",
-    )
+    print("\n===== ACCURACY =====")
+    print(f"Single-model accuracy:   {compute_accuracy(single_records):.3f}")
+    print(f"Ensemble accuracy:       {compute_accuracy(ensemble_records):.3f}")
+
+    print("\n===== DIFFICULTY BREAKDOWN (Single) =====")
+    print(difficulty_breakdown(single_records))
+
+    print("\n===== DIFFICULTY BREAKDOWN (Ensemble) =====")
+    print(difficulty_breakdown(ensemble_records))
+
+def extract_solver_answers(record):
+    if "ensemble" not in record:
+        return []
+
+    answers = []
+    for solver in record["ensemble"]["solvers"]:
+        num = solver.get("pred_answer_num")
+        answers.append(num)
+    return answers
+
+
+def majority_vote(records):
+    correct = 0
+    total = 0
+
+    for r in records:
+        if r["mode"] != "ensemble":
+            continue
+
+        gold = r["gold_answer_num"]
+        answers = extract_solver_answers(r)
+
+        # Remove None predictions
+        answers = [a for a in answers if a is not None]
+
+        if not answers:
+            continue
+
+        # Count frequency
+        freq = {}
+        for a in answers:
+            freq[a] = freq.get(a, 0) + 1
+
+        # Majority answer
+        majority = max(freq, key=freq.get)
+
+        if majority == gold:
+            correct += 1
+
+        total += 1
+
+    return correct / total if total else 0.0
+
+
+def oracle_best_of_k(records):
+    correct = 0
+    total = 0
+
+    for r in records:
+        if r["mode"] != "ensemble":
+            continue
+
+        gold = r["gold_answer_num"]
+        answers = extract_solver_answers(r)
+
+        if gold in answers:
+            correct += 1
+
+        total += 1
+
+    return correct / total if total else 0.0
+
+
+def per_solver_accuracy(records):
+    """
+    Compute accuracy for each solver in the ensemble.
+    Assumes ensemble records with:
+      r["ensemble"]["solvers"] -> list of { "name", "pred_answer_num", ... }
+    """
+    stats = {}  # name -> {"correct": int, "total": int}
+
+    for r in records:
+        if r["mode"] != "ensemble":
+            continue
+
+        gold = r.get("gold_answer_num")
+        if gold is None:
+            continue
+
+        for solver in r["ensemble"]["solvers"]:
+            name = solver["name"]
+            pred = solver.get("pred_answer_num")
+
+            if name not in stats:
+                stats[name] = {"correct": 0, "total": 0}
+
+            if pred is not None:
+                stats[name]["total"] += 1
+                if pred == gold:
+                    stats[name]["correct"] += 1
+
+    # Convert to accuracy
+    acc = {}
+    for name, s in stats.items():
+        total = s["total"]
+        acc[name] = s["correct"] / total if total else 0.0
+
+    return acc
+
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--single", type=str, required=True)
+    parser.add_argument("--ensemble", type=str, required=True)
+
+    args = parser.parse_args()
+
+    run_analysis(Path(args.single), Path(args.ensemble))

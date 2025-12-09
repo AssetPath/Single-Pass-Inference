@@ -2,7 +2,16 @@
 
 from typing import Dict, List, Tuple
 from app.vertex_client import call_flash, call_pro
+import re
+from typing import Dict, List, Tuple, Any
 
+
+def extract_last_number(text: str) -> str | None:
+    """Extract the last integer or decimal number from the text."""
+    if not text:
+        return None
+    matches = re.findall(r"-?\d+(?:\.\d+)?", text)
+    return matches[-1] if matches else None
 
 # ============================================================
 #  GENERAL REASONING AGENTS (used for both math + clinical)
@@ -36,34 +45,268 @@ AGENTS = [
     },
 ]
 
+#  DOMAIN-SPECIFIC QUANTITATIVE AGENTS
 
-# ============================================================
-#  GENERALIST PIPELINE (GSM8K / MATH)
-# ============================================================
+# General math (GSM8K / MATH)
+QUANT_AGENTS = [
+    {
+        "name": "arith_solver",
+        "suffix": (
+            "You are a university mathematics lecturer who specializes in arithmetic, "
+            "percentages, compounding, and basic quantitative reasoning. "
+            "Work slowly and show every intermediate numeric step."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "algebra_solver",
+        "suffix": (
+            "You are a math professor who turns word problems into algebraic equations. "
+            "Define variables, write equations, and solve them step by step."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "python_solver",
+        "suffix": (
+            "You are a quantitative analyst who thinks as if writing a short Python script. "
+            "Introduce variables, express formulas explicitly, and compute the answer carefully."
+        ),
+        "temperature": 0.15,
+    },
+    {
+        "name": "readcarefully_solver",
+        "suffix": (
+            "You are a careful teaching assistant. "
+            "First restate the problem in your own words. "
+            "List the known quantities and what is being asked before solving."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "heuristic_solver",
+        "suffix": (
+            "You are a senior problem-solving coach. "
+            "Focus on sanity checks, magnitude estimates, and catching subtle misreads."
+        ),
+        "temperature": 0.2,
+    },
+]
 
+# Finance / hedge fund math
+FIN_AGENTS = [
+    {
+        "name": "hf_quant",
+        "suffix": (
+            "You are a hedge fund quantitative researcher. "
+            "You specialize in compounding returns, leverage, beta hedging, and risk metrics."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "risk_manager",
+        "suffix": (
+            "You are a senior risk manager. "
+            "Think in terms of volatility, Value at Risk (VaR), and exposure sizing."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "portfolio_manager",
+        "suffix": (
+            "You are a long/short equity portfolio manager. "
+            "Reason using notions of gross exposure, net exposure, and betas."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "derivatives_trader",
+        "suffix": (
+            "You are an options and futures trader. "
+            "You compute payoffs, PnL, and leverage clearly and precisely."
+        ),
+        "temperature": 0.15,
+    },
+    {
+        "name": "accountant_fin",
+        "suffix": (
+            "You are a financial accountant. "
+            "You check all percentage calculations and cash flows very carefully."
+        ),
+        "temperature": 0.1,
+    },
+]
 
-def run_single_pass_generalist(problem: str) -> Tuple[Dict[str, str], str]:
+# Medical quantitative calculations (dosing, rates, half-life)
+MED_AGENTS = [
+    {
+        "name": "clin_pharm",
+        "suffix": (
+            "You are a clinical pharmacist. "
+            "You specialize in mg/kg dosing, infusion rates, half-life, and solution concentrations."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "icu_nurse",
+        "suffix": (
+            "You are an ICU nurse. "
+            "You set IV pump rates, drip rates, and perform unit conversions very carefully."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "med_resident",
+        "suffix": (
+            "You are a medical resident. "
+            "You show each step for dose, volume, and time calculations."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "dose_checker",
+        "suffix": (
+            "You are a safety-focused dose checker. "
+            "You verify that doses and rates are within plausible ranges and units."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "units_specialist",
+        "suffix": (
+            "You are a unit-conversion specialist. "
+            "You pay extra attention to mg, mcg, mL, %, and time units."
+        ),
+        "temperature": 0.1,
+    },
+]
+
+# Engineering quantitative problems (electrical, mechanical, chemical, petroleum)
+ENG_AGENTS = [
+    {
+        "name": "mech_eng",
+        "suffix": (
+            "You are a mechanical engineer. "
+            "You handle forces, work, power, and energy calculations with unit consistency."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "elec_eng",
+        "suffix": (
+            "You are an electrical engineer. "
+            "You use Ohm's law, power equations, and basic circuit relations accurately."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "chem_eng",
+        "suffix": (
+            "You are a chemical engineer. "
+            "You think in terms of mass balance, concentration, and simple thermodynamics."
+        ),
+        "temperature": 0.1,
+    },
+    {
+        "name": "petro_eng",
+        "suffix": (
+            "You are a petroleum engineer. "
+            "You reason about flow rates, pressures, and reservoir-style calculations."
+        ),
+        "temperature": 0.15,
+    },
+    {
+        "name": "eng_sanity",
+        "suffix": (
+            "You are an engineering sanity-checker. "
+            "You ensure units and orders of magnitude make physical sense."
+        ),
+        "temperature": 0.2,
+    },
+]
+
+def run_single_pass_with_agents(
+    problem: str,
+    agents: List[Dict[str, str]],
+    domain: str = "general",
+) -> Tuple[
+    Dict[str, str],              # agent_outputs
+    str,                         # judge_text
+    Dict[str, Dict[str, Any]],   # per-agent usage
+    Dict[str, Any],              # judge usage
+]:
     """
-    Ensemble inference for GSM8K/MATH evaluation.
-    Produces 5 generalist solver outputs + 1 judge (Gemini Pro).
+    Generic single-pass ensemble:
+    - Runs a set of domain-specific agents in parallel (conceptually)
+    - Uses a Pro judge to pick or compute the final numeric answer.
+    - Returns agent outputs + token usage for analysis.
     """
     agent_outputs: Dict[str, str] = {}
+    agent_usage: Dict[str, Dict[str, Any]] = {}
 
-    # ---- 1. Run all generalist solvers ----
-    for cfg in AGENTS:
-        full_prompt = (
-            "You are a generalist reasoning assistant solving math problems.\n"
-            f"{cfg['suffix']}\n\n"
-            f"Problem:\n{problem}\n\n"
-            "Give your full reasoning and final answer."
+    # Domain description for judge + solvers
+    if domain == "financial":
+        domain_desc = (
+            "You are solving quantitative finance and hedge fund style problems "
+            "about returns, leverage, beta hedging, and risk."
         )
-        answer = call_flash(full_prompt, temperature=cfg["temperature"], max_tokens=512)
-        agent_outputs[cfg["name"]] = answer
+    elif domain == "medical":
+        domain_desc = (
+            "You are solving medical dosage and infusion rate problems. "
+            "These involve mg/kg, mL/hr, half-life, and concentration."
+        )
+    elif domain == "engineering":
+        domain_desc = (
+            "You are solving engineering problems involving forces, power, circuits, "
+            "flow rates, and other physical quantities."
+        )
+    else:
+        domain_desc = "You are solving general quantitative math word problems."
 
-    # ---- 2. Judge (Gemini Pro) ----
-    judge_lines = [
-        "You are a careful reasoning judge.",
-        "You will evaluate several candidate solutions.\n",
+    # 1. Run all solvers with a strict output format
+    for cfg in agents:
+        full_prompt = (
+            f"{domain_desc}\n"
+            f"{cfg['suffix']}\n\n"
+            "Solve the problem carefully.\n"
+            "You must follow this exact output format:\n\n"
+            "Reasoning:\n"
+            "<step by step reasoning here>\n\n"
+            "Final Answer:\n"
+            "<single numeric answer, no words besides the number>\n\n"
+            "If the answer is not an integer, you may use a decimal or a simplified fraction.\n\n"
+            f"Problem:\n{problem}\n"
+        )
+
+        answer, usage = call_flash(
+            full_prompt,
+            temperature=cfg["temperature"],
+            max_tokens=512,
+            return_usage=True,
+        )
+        name = cfg["name"]
+        agent_outputs[name] = answer
+        agent_usage[name] = usage  # <- store per-agent token usage
+
+    # 2. Judge (Gemini Pro)
+    judge_lines: List[str] = [
+        "You are an expert quantitative evaluation assistant.\n",
+        "You will be given a problem and several candidate solutions.\n",
+        "Each solution has the format:\n"
+        "Reasoning:\n"
+        "<step by step reasoning>\n"
+        "Final Answer:\n"
+        "<number>\n\n",
+        "Your task:\n"
+        "1. Check whether each solver's reasoning and final numeric answer are mathematically correct.\n"
+        "2. Compare the final numeric answers to see which solvers agree.\n"
+        "3. Decide which solver is most likely correct.\n"
+        "4. If all solvers look unreliable, carefully solve the problem yourself.\n\n",
+        "Domain-specific hints:\n"
+        "- For financial problems, check compounding vs simple percentages, leverage math, hedging logic, and units (dollars, percentages, years).\n"
+        "- For medical problems, check unit conversions (mg, mcg, mL, %), rates (per hour, per minute), and plausible dose ranges.\n"
+        "- For engineering problems, check physical units, conservation relations, and whether the magnitude of the answer is realistic.\n"
+        "If these hints do not apply, just reason like a careful mathematician.\n\n",
         f"Original problem:\n{problem}\n\n",
         "Candidate solutions:\n",
     ]
@@ -72,14 +315,46 @@ def run_single_pass_generalist(problem: str) -> Tuple[Dict[str, str], str]:
         judge_lines.append(f"### {name}\n{text}\n")
 
     judge_lines.append(
-        "Select the most correct solution (or synthesize them) and return:\n"
-        "Final answer: <answer>\n"
-        "Explanation: <2–4 sentence justification>"
+        "Now decide on the best final numeric answer.\n"
+        "If you trust one solver, you may select its final answer.\n"
+        "If none are trustworthy, compute your own answer carefully.\n\n"
+        "Return your output in exactly this format:\n\n"
+        "FINAL_ANSWER: <single numeric answer>\n"
+        "JUSTIFICATION: <short explanation of why this answer is most likely correct>\n"
     )
 
-    final_answer = call_pro("\n".join(judge_lines), max_tokens=1024)
+    judge_text, judge_usage = call_pro(
+        "\n".join(judge_lines),
+        max_tokens=1024,
+        return_usage=True,
+    )
 
-    return agent_outputs, final_answer
+    return agent_outputs, judge_text, agent_usage, judge_usage
+
+
+def run_single_pass_generalist(
+    problem: str,
+) -> Tuple[Dict[str, str], str, Dict[str, Dict[str, Any]], Dict[str, Any]]:
+    return run_single_pass_with_agents(problem, QUANT_AGENTS, domain="general")
+
+
+def run_single_pass_financial(
+    problem: str,
+) -> Tuple[Dict[str, str], str, Dict[str, Dict[str, Any]], Dict[str, Any]]:
+    return run_single_pass_with_agents(problem, FIN_AGENTS, domain="financial")
+
+
+def run_single_pass_medical(
+    problem: str,
+) -> Tuple[Dict[str, str], str, Dict[str, Dict[str, Any]], Dict[str, Any]]:
+    return run_single_pass_with_agents(problem, MED_AGENTS, domain="medical")
+
+
+def run_single_pass_engineering(
+    problem: str,
+) -> Tuple[Dict[str, str], str, Dict[str, Dict[str, Any]], Dict[str, Any]]:
+    return run_single_pass_with_agents(problem, ENG_AGENTS, domain="engineering")
+
 
 
 # ============================================================
