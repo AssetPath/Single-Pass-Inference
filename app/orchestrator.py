@@ -1,5 +1,5 @@
 # app/orchestrator.py
-
+import re
 from typing import Dict, List, Tuple
 from app.vertex_client import call_flash, call_pro
 import re
@@ -14,7 +14,7 @@ def extract_last_number(text: str) -> str | None:
     return matches[-1] if matches else None
 
 # ============================================================
-#  GENERAL REASONING AGENTS (used for both math + clinical)
+#  GENERAL REASONING AGENTS (used for math)
 # ============================================================
 
 AGENTS = [
@@ -358,72 +358,7 @@ def run_single_pass_engineering(
 
 
 # ============================================================
-#  CLINICAL PIPELINE 1 (GENERAL ANALYSTS + CHIEF OF MEDICINE)
-# ============================================================
-
-
-def run_clinical_single_pass_general(dialogue: str) -> Tuple[Dict[str, str], str]:
-    """
-    Ensemble inference for clinical dialogue.
-    Uses SAME 5 general agents (not medical personas),
-    then a 'Chief of Medicine' Pro judge for a clinical plan.
-    """
-    agent_outputs: Dict[str, str] = {}
-
-    # ---- 1. Run 5 general analysts in a clinical reasoning wrapper ----
-    for cfg in CLINICAL_AGENTS:
-        full_prompt = (
-            "You are a careful clinical reasoning assistant.\n"
-            "You will be given a patient–clinician dialogue.\n"
-            "Your job is to:\n"
-            "- Extract key symptoms and risk factors\n"
-            "- Identify any red-flag or emergency findings\n"
-            "- Suggest next steps (tests, monitoring, escalation)\n\n"
-            f"Use the following perspective: {cfg['suffix']}\n"
-            "Do NOT include internal reasoning or chain-of-thought.\n\n"
-            "Dialogue:\n"
-            f"{dialogue}\n\n"
-            "Respond with a structured note (VISIBLE TEXT ONLY):\n"
-            "- Key findings\n"
-            "- Main concerns\n"
-            "- Recommended actions or diagnostic tests\n"
-        )
-        answer = call_flash(full_prompt, temperature=cfg["temperature"], max_tokens=512)
-        agent_outputs[cfg["name"]] = answer
-
-    # ---- 2. Chief of Medicine Judge ----
-    judge_lines: List[str] = [
-        "You are the Chief of Medicine at a large academic hospital.",
-        "You will receive:",
-        "1) The full patient dialogue",
-        "2) Notes from 5 clinical analysts with different reasoning styles\n",
-        "Your task: synthesize a SAFE and ACCURATE clinical assessment.\n",
-        "Dialogue:",
-        dialogue,
-        "\nAnalyst notes:",
-    ]
-
-    for name, text in agent_outputs.items():
-        judge_lines.append(f"\n### {name}\n{text}")
-
-    judge_lines.append(
-        "\nReturn ONLY the following structure (no extra commentary):\n\n"
-        "ASSESSMENT:\n"
-        "- <summary of symptoms, findings, red flags>\n\n"
-        "IMPRESSION:\n"
-        "- <likely diagnosis or differential>\n\n"
-        "PLAN:\n"
-        "- <next steps: tests, monitoring, escalation>\n"
-        "- <include any MUST-NOT-MISS actions like ER transfer>\n"
-    )
-
-    final_answer = call_pro("\n".join(judge_lines), max_tokens=1024)
-
-    return agent_outputs, final_answer
-
-
-# ============================================================
-#  CLINICAL PIPELINE 2 (CLINICAL AGENTS + CHIEF OF MEDICINE)
+#  CLINICAL PIPELINE (CLINICAL AGENTS + CHIEF OF MEDICINE)
 # ============================================================
 
 
@@ -490,45 +425,46 @@ def run_clinical_single_pass_clinical(
     1) Each agent produces {agent_name, section_header, section_text} as strings
     2) Chief of Medicine merges the 5 agent outputs + dialogue into final summary
     """
+
     agent_outputs: List[Dict[str, str]] = []
 
-    # ---- 1. Run 5 general analysts ----
+    # ---- 1. Run the 5 generalist agents ----
     for cfg in CLINICAL_AGENTS:
         full_prompt = (
             "You are a clinical summarization assistant.\n"
-            "You will summarize the following patient–doctor dialogue into a single structured section.\n\n"
+            "You will summarize the following patient–doctor dialogue into a single structured section.\n"
+            "Include ALL clinically relevant details from the dialogue.\n\n"
             "Instructions:\n"
-            f"- Allowed section headers (choose one): {SECTION_HEADERS_WITH_DESCRIPTIONS}\n"
-            "- Respond EXACTLY as:\n"
-            "  Section Header: <header>\n"
+            f"- Allowed section headers (choose one exactly): {SECTION_HEADERS_WITH_DESCRIPTIONS}\n"
+            "- Respond ONLY in EXACTLY this format, with these words verbatim:\n"
+            "  Section Header: <choose one allowed header exactly, don't include the description in []>\n"
             "  Section Text: <summary text>\n"
-            "- Do NOT include code fences, JSON, markdown, extra commentary, or extra fields.\n"
+            "Do NOT include code fences, JSON, markdown, extra commentary, or extra fields.\n\n"
+            "Example:\n"
+            "Section Header: genhx\n"
+            "Section Text: The patient is a 76-year-old female presenting for a refill of blood pressure medication. She has a history of hypertension and osteoarthritis. She reports no new complaints.\n\n"
             f"Perspective: {cfg['role']}\n"
             f"Dialogue:\n{dialogue}\n"
         )
 
-        answer = call_flash(full_prompt, temperature=cfg["temperature"], max_tokens=512)
-        answer = answer.strip()
+        answer = call_flash(
+            full_prompt, temperature=cfg["temperature"], max_tokens=1800
+        ).strip()
 
-        # Parse simple output format
-        lines = answer.splitlines()
-        section_header = "unknown"
-        section_text = ""
-        for line in lines:
-            if line.lower().startswith("section header:"):
-                section_header = line.split(":", 1)[1].strip()
-            elif line.lower().startswith("section text:"):
-                section_text = line.split(":", 1)[1].strip()
-            else:
-                # Append continuation lines to section_text
-                if section_text:
-                    section_text += " " + line.strip()
+        header_match = re.search(r"Section Header\s*:\s*(.+)", answer, re.IGNORECASE)
+        text_match = re.search(
+            r"Section Text\s*:\s*(.+)", answer, re.IGNORECASE | re.DOTALL
+        )
 
         agent_outputs.append(
             {
                 "agent_name": cfg["name"],
-                "section_header": section_header,
-                "section_text": section_text,
+                "section_header": (
+                    header_match.group(1).strip() if header_match else "PARSE_FAILED"
+                ),
+                "section_text": (
+                    text_match.group(1).strip() if text_match else "PARSE_FAILED"
+                ),
             }
         )
 
@@ -544,35 +480,32 @@ def run_clinical_single_pass_clinical(
         "You are the Chief of Medicine at a large academic hospital.\n"
         "You are given the original patient–doctor dialogue and multiple agent summaries.\n"
         "Task:\n"
-        "- Merge the agent summaries into a single final summary.\n"
-        "- Choose the most appropriate section header from the allowed list.\n"
-        "- Respond ONLY in this exact format:\n"
-        "  Section Header: <header>\n"
+        "- Create a single, authoritative summary of the patient encounter.\n"
+        "- Use the agent summaries as guidance to include ALL clinically relevant details from the dialogue.\n"
+        "- Choose the most appropriate section header from the allowed list exactly as provided.\n"
+        "- Respond ONLY in EXACTLY this format, with these words verbatim:\n"
+        "  Section Header: <choose one allowed header exactly, don't include the description in []>\n"
         "  Section Text: <summary text>\n"
-        "- Do NOT include code fences, JSON, markdown, or extra commentary.\n"
+        "Do NOT omit these labels, do not add extra commentary, do not use code blocks, JSON, or markdown.\n\n"
+        "Example:\n"
+        "Section Header: genhx\n"
+        "Section Text: The patient is a 76-year-old female presenting for a refill of blood pressure medication. She has a history of hypertension and osteoarthritis. She reports no new complaints.\n\n"
         f"Dialogue:\n{dialogue}\n"
         f"Agent summaries:\n{agent_summaries_text}\n"
     )
 
-    final_answer = call_pro(chief_prompt, max_tokens=1024)
-    final_answer = final_answer.strip()
+    final_answer = call_pro(chief_prompt, max_tokens=1800).strip()
 
-    # Parse final answer
-    final_header = "unknown"
-    final_text = ""
-    lines = final_answer.splitlines()
-    for line in lines:
-        if line.lower().startswith("section header:"):
-            final_header = line.split(":", 1)[1].strip()
-        elif line.lower().startswith("section text:"):
-            final_text = line.split(":", 1)[1].strip()
-        else:
-            if final_text:
-                final_text += " " + line.strip()
+    header_match = re.search(r"Section Header\s*:\s*(.+)", final_answer, re.IGNORECASE)
+    text_match = re.search(
+        r"Section Text\s*:\s*(.+)", final_answer, re.IGNORECASE | re.DOTALL
+    )
 
     final_summary = {
-        "section_header": final_header,
-        "section_text": final_text,
+        "section_header": (
+            header_match.group(1).strip() if header_match else "PARSE_FAILED"
+        ),
+        "section_text": text_match.group(1).strip() if text_match else "PARSE_FAILED",
     }
 
     return agent_outputs, final_summary
