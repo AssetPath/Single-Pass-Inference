@@ -120,9 +120,7 @@ def evaluate_ensemble(
     total = 0
     correct = 0
 
-    # -------------------------
     # Choose domain-specific ensemble
-    # -------------------------
     name = data_path.name.lower()
     if "financial" in name:
         ensemble_fn = run_single_pass_financial
@@ -133,9 +131,7 @@ def evaluate_ensemble(
     else:
         ensemble_fn = run_single_pass_generalist
 
-    # -------------------------
     # Helpers
-    # -------------------------
     def extract_final_answer(judge_text: str) -> str:
         """
         Pull the numeric answer from the judge output.
@@ -233,7 +229,6 @@ def evaluate_ensemble(
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
         print(f"[ensemble] Saved detailed results to {output_path}")
 
-# CLI
 
 def main() -> None:
     parser = argparse.ArgumentParser()

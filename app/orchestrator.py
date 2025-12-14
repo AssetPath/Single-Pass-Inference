@@ -354,11 +354,7 @@ def run_single_pass_engineering(
     return run_single_pass_with_agents(problem, ENG_AGENTS, domain="engineering")
 
 
-
-# ============================================================
 #  CLINICAL PIPELINE (CLINICAL AGENTS + CHIEF OF MEDICINE)
-# ============================================================
-
 
 # --------- Clinical agents (for patient–doctor dialogue) ----------
 

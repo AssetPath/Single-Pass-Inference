@@ -5,7 +5,6 @@ from pathlib import Path
 
 from datasets import load_dataset
 
-# Subsets in EleutherAI/hendrycks_math (from the HF card)
 SUBSETS = [
     "algebra",
     "counting_and_probability",

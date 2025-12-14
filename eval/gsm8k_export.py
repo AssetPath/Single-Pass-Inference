@@ -26,7 +26,6 @@ def export_gsm8k_jsonl(
     with out_path.open("w", encoding="utf-8") as f:
         for i, item in enumerate(dataset):
             problem = item["question"]
-            # GSM8K answers are usually "reasoning #### final_answer"
             raw_answer = item["answer"]
             if "####" in raw_answer:
                 gold = raw_answer.split("####")[-1].strip()
