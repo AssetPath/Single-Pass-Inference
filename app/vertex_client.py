@@ -49,7 +49,6 @@ def _extract_usage(meta) -> Dict[str, Optional[int]]:
             "total_tokens": None,
         }
 
-    # meta can be an object or a dict depending on SDK version
     def _get(field: str):
         if hasattr(meta, field):
             return getattr(meta, field)
